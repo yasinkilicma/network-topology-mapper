@@ -4,9 +4,9 @@ visualisierung.py – Topologie-Visualisierung
 Dieses Modul erstellt aus dem NetworkX-Graphen eine visuelle Darstellung
 der Netzwerktopologie in drei Ausgabeformaten:
 
-  PNG  – Statisches Bild mit matplotlib und NetworkX Spring-Layout.
-          Gerätetypen werden durch Farben und Knotenformen unterschieden.
-          Verbindungslabels zeigen die Port-Informationen an.
+  PNG  – Statisches Bild mit hierarchischem Schichten-Layout.
+          Gerätetypen werden durch Farben unterschieden.
+          Knotengrößen skalieren mit dem Verbindungsgrad.
 
   HTML – Interaktive Karte mit D3.js Force-Directed-Graph.
           Knoten können per Drag-and-Drop verschoben werden.
@@ -15,18 +15,22 @@ der Netzwerktopologie in drei Ausgabeformaten:
   Text – ASCII-Darstellung im Terminal – tabellarisch mit Geräten
           und Verbindungen. Kein zusätzliches Paket erforderlich.
 
-Spring-Layout (PNG):
-  Das Spring-Layout (Fruchterman-Reingold-Algorithmus) simuliert
-  physikalische Kräfte zwischen Knoten: Verbundene Knoten werden
-  angezogen, alle anderen abgestoßen. Das Ergebnis ist eine
-  ästhetisch ausgewogene, übersichtliche Graphdarstellung.
+Hierarchisches Layout (PNG):
+  Statt des unstrukturierten Spring-Layouts ordnet das hierarchische
+  Layout Geräte nach ihrer Netzwerkrolle in horizontalen Schichten an:
+    Schicht 0 (oben):  Router, Firewall
+    Schicht 1:         Kern-Switches (direkt am Router)
+    Schicht 2:         Zugangs-Switches
+    Schicht 3:         Server
+    Schicht 4 (unten): Workstations, unbekannte Geräte
+  So entsteht eine klassische Netzwerktopologie-Darstellung,
+  die der physischen Infrastruktur entspricht.
 
 D3.js Force-Directed-Graph (HTML):
-  D3 simuliert ebenfalls physikalische Kräfte im Browser. Die Simulation
+  D3 simuliert physikalische Kräfte im Browser. Die Simulation
   läuft interaktiv: Knoten lassen sich verschieben, Zoom und Pan sind
   möglich. Die Gerätedaten werden als JSON direkt in die HTML-Datei
-  eingebettet – keine externe Server-Verbindung nach D3-CDN nötig
-  für die Daten, nur für die D3-Bibliothek selbst.
+  eingebettet – keine externe Server-Verbindung nötig außer D3-CDN.
 """
 
 import os
@@ -84,29 +88,39 @@ class Visualisierer:
         """
         Erstellt ein PNG-Bild der Netzwerktopologie.
 
-        Layoutalgorithmus: spring_layout (Fruchterman-Reingold)
-        Knotenfarben und -formen entsprechen dem Gerätetyp.
-        Kanten werden mit Port-Informationen beschriftet.
+        Layoutalgorithmus: Hierarchisches Schichten-Layout
+          Schicht 0 (oben):  Router, Firewall
+          Schicht 1:         Kern-Switches (direkt am Router)
+          Schicht 2:         Zugangs-Switches
+          Schicht 3:         Server
+          Schicht 4 (unten): Workstations, unbekannte Geräte
+
+        Knotengrößen skalieren mit dem Verbindungsgrad (Degree):
+        stark vernetzte Geräte erscheinen größer.
         """
         if not MATPLOTLIB_VERFUEGBAR:
             print("  matplotlib/networkx nicht installiert. Textausgabe stattdessen:")
             self._text_ausgabe(graph, [])
             return
 
-        fig, ax = plt.subplots(figsize=(16, 10))
+        fig, ax = plt.subplots(figsize=(18, 11))
         ax.set_facecolor("#1a1a2e")
         fig.patch.set_facecolor("#1a1a2e")
 
-        # Layout berechnen – seed für reproduzierbare Positionen
-        positionen = nx.spring_layout(graph, k=2.5, seed=42)
+        # Hierarchisches Layout berechnen
+        positionen = self._hierarchisches_layout(graph)
 
-        # Knoten nach Typ gruppieren für unterschiedliche Darstellung
-        knotenfarben = [
-            graph.nodes[n].get("farbe", "#bdc3c7")
+        # Knotengrößen nach Verbindungsgrad (Degree) skalieren –
+        # stark vernetzte Geräte (Kern-Switches, Router) erscheinen größer
+        max_degree = max(dict(graph.degree()).values()) or 1
+        knotengroessen = [
+            400 + (graph.degree(n) / max_degree) * 900
             for n in graph.nodes()
         ]
-        knotengroessen = [
-            800 if graph.nodes[n].get("typ") in ("router", "firewall", "switch") else 500
+
+        # Knotenfarben nach Typ
+        knotenfarben = [
+            graph.nodes[n].get("farbe", "#bdc3c7")
             for n in graph.nodes()
         ]
 
@@ -134,7 +148,7 @@ class Visualisierer:
             font_weight="bold"
         )
 
-        # Kanten-Labels (Port-Informationen) – nur wenn gesetzt
+        # Kanten-Labels (Protokoll) – nur wenn gesetzt
         kanten_labels = {
             (u, v): d.get("protokoll", "")
             for u, v, d in graph.edges(data=True)
@@ -176,6 +190,64 @@ class Visualisierer:
         plt.savefig(dateiname, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
         plt.close()
         print(f"     -> PNG gespeichert: {dateiname}")
+
+    def _hierarchisches_layout(self, graph: Any) -> dict:
+        """
+        Berechnet ein hierarchisches Schichten-Layout für den Graphen.
+
+        Geräte werden nach Netzwerkschicht (OSI-Layer / Rolle) auf
+        horizontalen Reihen angeordnet:
+
+          Schicht 0 (oben):  Router, Firewall
+          Schicht 1:         Kern-Switches (direkt mit Router verbunden)
+          Schicht 2:         Zugangs-Switches (nicht direkt am Router)
+          Schicht 3:         Server
+          Schicht 4 (unten): Workstations und unbekannte Geräte
+
+        Innerhalb jeder Schicht werden die Knoten gleichmäßig auf der
+        X-Achse verteilt. Ein leichter vertikaler Versatz (Jitter) bei
+        großen Schichten verhindert Label-Überlappungen.
+        """
+        # Kern-Switches: direkte Nachbarn von Router oder Firewall
+        kern_switches = set()
+        for knoten in graph.nodes():
+            if graph.nodes[knoten].get("typ") in ("router", "firewall"):
+                for nachbar in graph.neighbors(knoten):
+                    if graph.nodes[nachbar].get("typ") == "switch":
+                        kern_switches.add(nachbar)
+
+        # Knoten den Schichten zuordnen
+        schichten: dict = {0: [], 1: [], 2: [], 3: [], 4: []}
+        for knoten in graph.nodes():
+            typ = graph.nodes[knoten].get("typ", "unknown")
+            if typ in ("router", "firewall"):
+                schichten[0].append(knoten)
+            elif typ == "switch":
+                schichten[1 if knoten in kern_switches else 2].append(knoten)
+            elif typ == "server":
+                schichten[3].append(knoten)
+            else:
+                schichten[4].append(knoten)
+
+        # Y-Positionen je Schicht (1.0 = oben, -1.0 = unten)
+        y_werte = {0: 1.0, 1: 0.5, 2: 0.0, 3: -0.5, 4: -1.0}
+
+        positionen = {}
+        import random
+        rng = random.Random(42)  # Fester Seed für reproduzierbare Jitter
+
+        for schicht, knoten_liste in schichten.items():
+            if not knoten_liste:
+                continue
+            n = len(knoten_liste)
+            y = y_werte[schicht]
+            for i, knoten in enumerate(knoten_liste):
+                # Gleichmäßige X-Verteilung, leichter Y-Jitter bei großen Schichten
+                x = (i + 1) / (n + 1) * 2.0 - 1.0
+                jitter = rng.uniform(-0.04, 0.04) if n > 3 else 0.0
+                positionen[knoten] = (x, y + jitter)
+
+        return positionen
 
     # ------------------------------------------------------------------
     # HTML-Ausgabe (D3.js Force-Directed-Graph)
@@ -276,28 +348,23 @@ const height = document.getElementById('svg-container').clientHeight;
 const svg = d3.select('#graph');
 const tooltip = document.getElementById('tooltip');
 
-// Zoom und Pan aktivieren
 const zoom = d3.zoom().scaleExtent([0.2, 5]).on('zoom', e => container.attr('transform', e.transform));
 svg.call(zoom);
 const container = svg.append('g');
 
-// Physikalische Simulation starten
 const simulation = d3.forceSimulation(graphData.nodes)
-  .force('link',   d3.forceLink(graphData.links).id(d => d.id).distance(120))
-  .force('charge', d3.forceManyBody().strength(-400))
-  .force('center', d3.forceCenter(width / 2, height / 2))
+  .force('link',      d3.forceLink(graphData.links).id(d => d.id).distance(120))
+  .force('charge',    d3.forceManyBody().strength(-400))
+  .force('center',    d3.forceCenter(width / 2, height / 2))
   .force('collision', d3.forceCollide(40));
 
-// Kanten zeichnen
 const link = container.append('g')
   .selectAll('line').data(graphData.links).join('line').attr('class', 'link');
 
-// Kanten-Labels
 const linkLabel = container.append('g')
   .selectAll('text').data(graphData.links).join('text')
   .attr('class', 'link-label').text(d => d.protokoll);
 
-// Knoten-Gruppe
 const node = container.append('g')
   .selectAll('g').data(graphData.nodes).join('g').attr('class', 'node')
   .call(d3.drag()
@@ -306,7 +373,6 @@ const node = container.append('g')
     .on('end',   (e, d) => {{ if (!e.active) simulation.alphaTarget(0); d.fx = null; d.fy = null; }})
   );
 
-// Kreis für jeden Knoten
 node.append('circle')
   .attr('r', d => ['router','switch','firewall'].includes(d.typ) ? 18 : 13)
   .attr('fill', d => d.farbe)
@@ -318,10 +384,10 @@ node.append('circle')
   }})
   .on('mouseout', () => tooltip.style.opacity = 0);
 
-// Bezeichnung unter dem Knoten
-node.append('text').text(d => d.id).attr('y', d => ['router','switch','firewall'].includes(d.typ) ? 30 : 25).attr('text-anchor', 'middle');
+node.append('text').text(d => d.id)
+  .attr('y', d => ['router','switch','firewall'].includes(d.typ) ? 30 : 25)
+  .attr('text-anchor', 'middle');
 
-// Simulationsschritt: Positionen aktualisieren
 simulation.on('tick', () => {{
   link.attr('x1', d => d.source.x).attr('y1', d => d.source.y)
       .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
