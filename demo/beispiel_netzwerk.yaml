@@ -1,0 +1,178 @@
+# beispiel_netzwerk.yaml – Demo-Topologiedaten
+# ==============================================
+# Diese Datei enthält eine vollständige Beispiel-Netzwerktopologie
+# für den Demo-Modus (--demo). Sie kann angepasst werden, um eigene
+# Netzwerkstrukturen zu visualisieren – ohne SNMP-fähige Hardware.
+#
+# Gerätetypen werden automatisch anhand von sys_descr erkannt:
+#   'Cisco IOS'        -> router
+#   'Cisco Catalyst'   -> switch
+#   'Linux', 'Ubuntu'  -> server
+#   'Windows 10/11'    -> workstation
+#   'FortiGate'        -> firewall
+
+geraete:
+
+  # --- Kern-Infrastruktur ---
+
+  - host: "192.168.1.1"
+    sys_name: "Core-Router-01"
+    sys_descr: "Cisco IOS Software, Version 15.2(4)M, RELEASE SOFTWARE"
+    sys_location: "Serverraum EG, Rack A1"
+    nachbarn:
+      - sys_name: "Core-Switch-01"
+        port_lokal: "GigabitEthernet0/0"
+        port_remote: "GigabitEthernet1/0/1"
+        protokoll: "CDP"
+      - sys_name: "Core-Switch-02"
+        port_lokal: "GigabitEthernet0/1"
+        port_remote: "GigabitEthernet1/0/1"
+        protokoll: "CDP"
+      - sys_name: "Firewall-01"
+        port_lokal: "GigabitEthernet0/2"
+        port_remote: "port1"
+        protokoll: "LLDP"
+
+  - host: "192.168.1.2"
+    sys_name: "Firewall-01"
+    sys_descr: "FortiGate-100F v7.2.0"
+    sys_location: "Serverraum EG, Rack A1"
+    nachbarn:
+      - sys_name: "Core-Router-01"
+        port_lokal: "port1"
+        port_remote: "GigabitEthernet0/2"
+        protokoll: "LLDP"
+
+  - host: "192.168.1.10"
+    sys_name: "Core-Switch-01"
+    sys_descr: "Cisco Catalyst 3750 Series, Software Version 12.2"
+    sys_location: "Serverraum EG, Rack A2"
+    nachbarn:
+      - sys_name: "Core-Router-01"
+        port_lokal: "GigabitEthernet1/0/1"
+        port_remote: "GigabitEthernet0/0"
+        protokoll: "CDP"
+      - sys_name: "Access-Switch-01"
+        port_lokal: "GigabitEthernet1/0/2"
+        port_remote: "GigabitEthernet0/1"
+        protokoll: "LLDP"
+      - sys_name: "Server-01"
+        port_lokal: "GigabitEthernet1/0/3"
+        port_remote: "eth0"
+        protokoll: "LLDP"
+      - sys_name: "Server-02"
+        port_lokal: "GigabitEthernet1/0/4"
+        port_remote: "eth0"
+        protokoll: "LLDP"
+
+  - host: "192.168.1.11"
+    sys_name: "Core-Switch-02"
+    sys_descr: "Cisco Catalyst 3750 Series, Software Version 12.2"
+    sys_location: "Serverraum EG, Rack B2"
+    nachbarn:
+      - sys_name: "Core-Router-01"
+        port_lokal: "GigabitEthernet1/0/1"
+        port_remote: "GigabitEthernet0/1"
+        protokoll: "CDP"
+      - sys_name: "Access-Switch-02"
+        port_lokal: "GigabitEthernet1/0/2"
+        port_remote: "GigabitEthernet0/1"
+        protokoll: "LLDP"
+      - sys_name: "Server-03"
+        port_lokal: "GigabitEthernet1/0/3"
+        port_remote: "eth0"
+        protokoll: "LLDP"
+
+  # --- Zugangsschicht ---
+
+  - host: "192.168.2.1"
+    sys_name: "Access-Switch-01"
+    sys_descr: "HP ProCurve Switch 2510G-48, Revision R.11.12"
+    sys_location: "Büro OG, Rack C1"
+    nachbarn:
+      - sys_name: "Core-Switch-01"
+        port_lokal: "GigabitEthernet0/1"
+        port_remote: "GigabitEthernet1/0/2"
+        protokoll: "LLDP"
+      - sys_name: "Workstation-01"
+        port_lokal: "FastEthernet0/1"
+        port_remote: "eth0"
+        protokoll: "LLDP"
+      - sys_name: "Workstation-02"
+        port_lokal: "FastEthernet0/2"
+        port_remote: "eth0"
+        protokoll: "LLDP"
+      - sys_name: "Workstation-03"
+        port_lokal: "FastEthernet0/3"
+        port_remote: "eth0"
+        protokoll: "LLDP"
+
+  - host: "192.168.2.2"
+    sys_name: "Access-Switch-02"
+    sys_descr: "HP ProCurve Switch 2510G-24, Revision R.11.12"
+    sys_location: "Büro UG, Rack D1"
+    nachbarn:
+      - sys_name: "Core-Switch-02"
+        port_lokal: "GigabitEthernet0/1"
+        port_remote: "GigabitEthernet1/0/2"
+        protokoll: "LLDP"
+      - sys_name: "Workstation-04"
+        port_lokal: "FastEthernet0/1"
+        port_remote: "eth0"
+        protokoll: "LLDP"
+      - sys_name: "Workstation-05"
+        port_lokal: "FastEthernet0/2"
+        port_remote: "eth0"
+        protokoll: "LLDP"
+
+  # --- Server ---
+
+  - host: "192.168.1.30"
+    sys_name: "Server-01"
+    sys_descr: "Linux Ubuntu 22.04.3 LTS"
+    sys_location: "Serverraum EG, Rack A3"
+    nachbarn: []
+
+  - host: "192.168.1.31"
+    sys_name: "Server-02"
+    sys_descr: "Linux Debian 12 Bookworm"
+    sys_location: "Serverraum EG, Rack A3"
+    nachbarn: []
+
+  - host: "192.168.1.32"
+    sys_name: "Server-03"
+    sys_descr: "VMware ESXi 8.0"
+    sys_location: "Serverraum EG, Rack B3"
+    nachbarn: []
+
+  # --- Workstations ---
+
+  - host: "192.168.2.10"
+    sys_name: "Workstation-01"
+    sys_descr: "Windows 11 Pro 22H2"
+    sys_location: "Büro OG"
+    nachbarn: []
+
+  - host: "192.168.2.11"
+    sys_name: "Workstation-02"
+    sys_descr: "Windows 11 Pro 22H2"
+    sys_location: "Büro OG"
+    nachbarn: []
+
+  - host: "192.168.2.12"
+    sys_name: "Workstation-03"
+    sys_descr: "Windows 10 Pro 21H2"
+    sys_location: "Büro OG"
+    nachbarn: []
+
+  - host: "192.168.2.20"
+    sys_name: "Workstation-04"
+    sys_descr: "Windows 11 Pro 22H2"
+    sys_location: "Büro UG"
+    nachbarn: []
+
+  - host: "192.168.2.21"
+    sys_name: "Workstation-05"
+    sys_descr: "Windows 10 Pro 21H2"
+    sys_location: "Büro UG"
+    nachbarn: []

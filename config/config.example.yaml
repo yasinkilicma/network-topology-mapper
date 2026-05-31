@@ -1,0 +1,17 @@
+# config.example.yaml – Beispielkonfiguration
+# =============================================
+# Als 'config.yaml' kopieren und anpassen.
+# Wird derzeit nicht direkt vom Tool gelesen –
+# Parameter über Kommandozeilenargumente übergeben.
+
+snmp:
+  community: "public"      # SNMP-Community (Read-Only)
+  version: 2               # SNMP-Version: 2 = SNMPv2c
+  timeout: 2.0             # Timeout pro Anfrage in Sekunden
+  port: 161                # Standard-SNMP-Port
+
+scan:
+  netzwerke:
+    - "192.168.1.0/24"     # Haupt-LAN
+    - "10.0.0.0/24"        # Management-Netz
+  ausgabe: "html"          # png | html | text

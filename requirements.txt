@@ -1,0 +1,7 @@
+# Externe Abhängigkeiten
+
+pysnmp>=4.4.12      # SNMP-Abfragen (GET, WALK) für Geräteerkennung
+networkx>=3.0       # Graphdatenstruktur für Topologie-Modellierung
+matplotlib>=3.7     # PNG-Visualisierung des Netzwerk-Graphen
+pyyaml>=6.0         # YAML-Konfigurationsdateien lesen
+colorama>=0.4.6     # Farbige Terminal-Ausgabe (Windows-kompatibel)
